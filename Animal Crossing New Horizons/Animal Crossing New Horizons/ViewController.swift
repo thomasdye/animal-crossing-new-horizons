@@ -31,15 +31,30 @@ class ViewController: UIViewController {
     
     var villagers: [Villager]? = []
     var unwrappedVillagers: [Villager] = []
+    var allImageURLs: [String] = []
+    var allImages: [UIImage] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
         createVillagers()
-        todaysMessage(date: "20200518")
+        setTodaysDate()
     }
     
+    func setTodaysDate() {
+        
+        let todaysDate = Date()
+        let format = DateFormatter()
+        format.dateFormat = "yyyy-MM-dd"
+        let formattedTodaysDate = format.string(from: todaysDate)
+        
+        todaysMessage(date: formattedTodaysDate)
+        
+    }
+    
+    // Create Villagers
     func createVillagers() {
+    
         let villagersURL = URL(string: "https://nookipedia.com/api/villager/")
         guard let unwrappedURL = villagersURL else { return }
         var request = URLRequest(url: unwrappedURL)
@@ -54,8 +69,6 @@ class ViewController: UIViewController {
                     let villagersFromJSON = try JSONDecoder().decode([Villager].self, from: data) as [Villager]
                     
                     for newVillager in villagersFromJSON {
-//                        guard let names = newVillager.villager_key else { return }
-//                        print(names)
                         self.villagers!.append(newVillager)
                     }
                 } catch {
@@ -65,6 +78,7 @@ class ViewController: UIViewController {
         }.resume()
     }
     
+    // Get todaysMessage for given date
     func todaysMessage(date: String) {
         
         let todaysMessageURL = URL(string: "https://nookipedia.com/api/today/\(date)/")
@@ -80,14 +94,16 @@ class ViewController: UIViewController {
     
                 do {
                     let todaysMessageFromJSON = try JSONDecoder().decode(Today.self, from: data) as Today
-                    guard let message = todaysMessageFromJSON.message,
-                        let events = todaysMessageFromJSON.events,
+                    guard let events = todaysMessageFromJSON.events,
                         let imageURL = todaysMessageFromJSON.villager_images?.first else { return }
+                    
+                    // Need to use allImages for cases where more than one image returns
+                    self.allImageURLs = todaysMessageFromJSON.villager_images!
                     var eventString: String = "\n"
                     for event in events {
-                        eventString.append("-" + event + "\n")
+                        eventString.append("-" + event + "\n\n")
                     }
-                    self.todaysMessageLabel.text = "\(message) \(eventString)"
+                    self.todaysMessageLabel.text = "We have the following announcements for today:\n\(eventString)"
                     self.loadImage(url: URL(string: imageURL)!)
                 } catch {
                     print(error.localizedDescription)
@@ -98,18 +114,27 @@ class ViewController: UIViewController {
         }.resume()
     }
     
+    // Load image function
     func loadImage(url: URL) {
         DispatchQueue.main.async { [weak self] in
-            if let data = try? Data(contentsOf: url) {
-                if let image = UIImage(data: data) {
-                    DispatchQueue.main.async {
-                        self?.villagerImage.image = image
+            self!.allImages = []
+            for url in self!.allImageURLs {
+                print("url: \(url)")
+                if let data = try? Data(contentsOf: URL(string: url)!) {
+                    if let image = UIImage(data: data) {
+                        DispatchQueue.main.async {
+                            self!.allImages.append(image)
+                            self?.villagerImage.animationImages = self?.allImages
+                            self?.villagerImage.animationDuration = 2.0
+                            self?.villagerImage.startAnimating()
+                        }
                     }
                 }
             }
         }
     }
     
+    // Change date button tapped
     @IBAction func changeDateButtonTapped(_ sender: Any) {
         let todaysDate = Date()
         let selectedDate = datePicker.date
@@ -119,13 +144,14 @@ class ViewController: UIViewController {
         let formattedTodaysDate = format.string(from: todaysDate)
         print(formattedDate)
         
+        // Set todays message to selected date
         todaysMessage(date: formattedDate)
         
+        // If today's date is not equal to selected date
         if formattedTodaysDate != formattedDate {
             format.dateFormat = "MMM dd, yyyy"
-            let prettyFormattedDate = format.string(from: selectedDate)
-            todaysMessageTitleLabel.text = "\(prettyFormattedDate)"
-            
+            let formattedDateForTitle = format.string(from: selectedDate)
+            todaysMessageTitleLabel.text = "\(formattedDateForTitle)"
         }
     }
 }
